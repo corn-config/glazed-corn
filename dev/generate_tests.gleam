@@ -11,7 +11,8 @@ type Test {
 fn test_to_string(test_case: Test) -> String {
   case test_case {
     Fail(name:, corn_path:) -> "pub fn " <> name <> "() {
-let assert Error(_) = read_bits(\"" <> corn_path <> "\")
+let assert Ok(corn_source) = read_bits(\"" <> corn_path <> "\")
+let assert Error(_) = glazed_corn.parse_bits(corn_source)
 }
 "
     Pass(name:, corn_path:, json_path:) -> "pub fn " <> name <> "() {
@@ -27,23 +28,24 @@ assert parsed_corn == parsed_json
   }
 }
 
-fn path_to_test(path: String) -> Test {
+fn path_to_test(corn_path: String) -> Test {
+  let parts = filepath.split(corn_path)
   let name =
-    filepath.split(path)
+    parts
     |> list.drop(2)
     |> string.join("_")
     |> string.replace(".pos.corn", "")
     |> string.replace(".neg.corn", "")
     <> "_test"
 
-  case path |> string.ends_with(".pos.corn") {
-    True ->
-      Pass(
-        name,
-        corn_path: path,
-        json_path: path |> string.replace(".pos.corn", ".json"),
-      )
-    False -> Fail(name, corn_path: path)
+  let json_path =
+    ["test-suite", "json", ..list.drop(parts, 2)]
+    |> string.join("/")
+    |> string.replace(".pos.corn", ".json")
+
+  case corn_path |> string.ends_with(".pos.corn") {
+    True -> Pass(name, corn_path:, json_path:)
+    False -> Fail(name, corn_path:)
   }
 }
 
