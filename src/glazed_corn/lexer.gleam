@@ -80,7 +80,7 @@ pub fn new(source: String) -> Lexer {
   Lexer(
     source:,
     new_line_splitter: splitter.new(["\n", "\r\n"]),
-    string_splitter: splitter.new(["\""]),
+    string_splitter: splitter.new(["\\\\", "\\\"", "\\n", "\\r", "\\t", "\""]),
     key_splitter: splitter.new(["=", ".", ..whitespace_codepoints]),
     quoted_key_splitter: splitter.new(["'"]),
     float_splitter: splitter.new([".", ..whitespace_codepoints]),
@@ -123,11 +123,8 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
         lexer.new_line_splitter |> splitter.split(rest)
       #(Comment(before |> string.trim_start), lexer |> advance(after)) |> Ok
     }
-    "\"" <> rest -> {
-      let #(before, _split, after) =
-        lexer.string_splitter |> splitter.split(rest)
-      #(Literal(before |> string.trim_start), lexer |> advance(after)) |> Ok
-    }
+
+    "\"" <> rest -> lex_literal(lexer |> advance(rest), "")
 
     "-0x" <> rest -> lex_num_radix(lexer |> advance(rest), True, 16)
     "0x" <> rest -> lex_num_radix(lexer |> advance(rest), False, 16)
@@ -182,6 +179,25 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
         }
       }
     }
+  }
+}
+
+fn lex_literal(
+  lexer: Lexer,
+  acc: String,
+) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+  let #(before, split, after) =
+    lexer.string_splitter |> splitter.split(lexer.source)
+
+  echo split
+
+  case split {
+    "\\\\" -> lex_literal(advance(lexer, after), acc <> before <> "\\")
+    "\\\"" -> lex_literal(advance(lexer, after), acc <> before <> "\"")
+    "\\n" -> lex_literal(advance(lexer, after), acc <> before <> "\n")
+    "\\r" -> lex_literal(advance(lexer, after), acc <> before <> "\r")
+    "\\t" -> lex_literal(advance(lexer, after), acc <> before <> "\t")
+    _ -> #(Literal(acc), lexer |> advance(after)) |> Ok
   }
 }
 
