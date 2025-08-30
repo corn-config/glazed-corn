@@ -25,7 +25,7 @@ pub type EntryOrSpread {
 }
 
 pub type PairOrSpread {
-  Pair(String, Entry)
+  Pair(List(String), Entry)
   ObjectSpread(String)
 }
 
@@ -104,14 +104,29 @@ fn do_parse_object(
 ) -> Result(#(List(PairOrSpread), List(Token)), glazed_corn.ParseError) {
   case tokens {
     [token.CloseBrace, ..rest] -> #(object, rest) |> Ok
-    [token.Key(key), token.Equals, ..rest] -> {
+    [token.Key(key), ..rest] -> {
+      use #(key_chain, rest) <- result.try(rest |> parse_key_chain([key]))
       use #(value, rest) <- result.try(rest |> parse_entry)
 
-      do_parse_object(rest, [Pair(key, value), ..object])
+      do_parse_object(rest, [Pair(key_chain, value), ..object])
     }
     [token.Spread, token.InputName(input), ..rest] ->
       do_parse_object(rest, [ObjectSpread(input), ..object])
     [token.Comment(_), ..rest] -> do_parse_object(rest, object)
+    [] -> Error(glazed_corn.UnexpectedEof)
+    [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
+  }
+}
+
+fn parse_key_chain(
+  tokens: List(Token),
+  keys: List(String),
+) -> Result(#(List(String), List(Token)), glazed_corn.ParseError) {
+  case tokens {
+    [token.Equals, ..rest] -> #(keys |> list.reverse, rest) |> Ok
+    [token.Chain, token.Key(key), ..rest] ->
+      parse_key_chain(rest, [key, ..keys])
+    [token.Comment(_), ..rest] -> parse_key_chain(rest, keys)
     [] -> Error(glazed_corn.UnexpectedEof)
     [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
   }
