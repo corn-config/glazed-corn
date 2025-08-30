@@ -3,7 +3,7 @@ import gleam/float
 import gleam/list
 import gleam/result
 import gleam/string
-import splitter
+import splitter.{type Splitter}
 
 pub type Token {
   Let
@@ -25,17 +25,6 @@ pub type Token {
   Key(String)
   Comment(String)
   Eof
-}
-
-pub fn tokenize(
-  source: String,
-  tokens: List(Token),
-) -> Result(List(Token), glazed_corn.ParseError) {
-  case source |> string.trim_start |> next {
-    Ok(#(Eof, _)) -> Ok(tokens |> list.reverse)
-    Ok(#(token, rest)) -> tokenize(rest, [token, ..tokens])
-    Error(error) -> Error(error)
-  }
 }
 
 const whitespace_codepoints: List(String) = [
@@ -91,36 +80,71 @@ const whitespace_codepoints: List(String) = [
   "\u{3000}",
 ]
 
-fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
-  let new_line_splitter = splitter.new(["\n", "\r\n"])
-  let string_splitter = splitter.new(["\""])
-  let key_splitter = splitter.new(["=", ".", ..whitespace_codepoints])
-  let quoted_key_splitter = splitter.new(["'"])
+pub opaque type Lexer {
+  Lexer(
+    source: String,
+    new_line_splitter: Splitter,
+    string_splitter: Splitter,
+    key_splitter: Splitter,
+    quoted_key_splitter: Splitter,
+    float_splitter: Splitter,
+  )
+}
 
-  case source {
-    "" -> #(Eof, "") |> Ok
+pub fn new(source: String) -> Lexer {
+  Lexer(
+    source:,
+    new_line_splitter: splitter.new(["\n", "\r\n"]),
+    string_splitter: splitter.new(["\""]),
+    key_splitter: splitter.new(["=", ".", ..whitespace_codepoints]),
+    quoted_key_splitter: splitter.new(["'"]),
+    float_splitter: splitter.new([".", ..whitespace_codepoints]),
+  )
+}
 
-    "=" <> rest -> #(Equals, rest) |> Ok
-    "{" <> rest -> #(OpenBrace, rest) |> Ok
-    "}" <> rest -> #(CloseBrace, rest) |> Ok
-    "[" <> rest -> #(OpenBracket, rest) |> Ok
-    "]" <> rest -> #(CloseBracket, rest) |> Ok
-    ".." <> rest -> #(Spread, rest) |> Ok
-    "." <> rest -> #(Chain, rest) |> Ok
+fn advance(lexer: Lexer, source: String) -> Lexer {
+  Lexer(..lexer, source:)
+}
+
+pub fn tokenize(lexer: Lexer) -> Result(List(Token), glazed_corn.ParseError) {
+  do_tokenize(lexer, [])
+}
+
+fn do_tokenize(
+  lexer: Lexer,
+  tokens: List(Token),
+) -> Result(List(Token), glazed_corn.ParseError) {
+  case lexer |> next {
+    Ok(#(Eof, _)) -> Ok(tokens |> list.reverse)
+    Ok(#(token, lexer)) -> do_tokenize(lexer, [token, ..tokens])
+    Error(error) -> Error(error)
+  }
+}
+
+fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+  case lexer.source |> string.trim_start {
+    "" -> #(Eof, lexer) |> Ok
+
+    "=" <> rest -> #(Equals, lexer |> advance(rest)) |> Ok
+    "{" <> rest -> #(OpenBrace, lexer |> advance(rest)) |> Ok
+    "}" <> rest -> #(CloseBrace, lexer |> advance(rest)) |> Ok
+    "[" <> rest -> #(OpenBracket, lexer |> advance(rest)) |> Ok
+    "]" <> rest -> #(CloseBracket, lexer |> advance(rest)) |> Ok
+    ".." <> rest -> #(Spread, lexer |> advance(rest)) |> Ok
+    "." <> rest -> #(Chain, lexer |> advance(rest)) |> Ok
 
     "//" <> rest -> {
-      let #(before, _split, after) = new_line_splitter |> splitter.split(rest)
-
-      #(Comment(before |> string.trim_start), after) |> Ok
+      let #(before, _split, after) =
+        lexer.new_line_splitter |> splitter.split(rest)
+      #(Comment(before |> string.trim_start), lexer |> advance(after)) |> Ok
     }
-
     "\"" <> rest -> {
-      let #(before, _split, after) = string_splitter |> splitter.split(rest)
-
-      #(Literal(before |> string.trim_start), after) |> Ok
+      let #(before, _split, after) =
+        lexer.string_splitter |> splitter.split(rest)
+      #(Literal(before |> string.trim_start), lexer |> advance(after)) |> Ok
     }
 
-    "-" <> rest -> lex_num(rest, True)
+    "-" <> rest -> lex_num(lexer |> advance(rest), True)
     "0" <> _
     | "1" <> _
     | "2" <> _
@@ -130,38 +154,37 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
     | "6" <> _
     | "7" <> _
     | "8" <> _
-    | "9" <> _ -> lex_num(source, False)
+    | "9" <> _ -> lex_num(lexer, False)
 
     "$" <> name -> {
       case name |> is_valid_start {
         True -> {
           let #(input, rest) = lex_input_name(name, "")
-
-          Ok(#(InputName(input), rest))
+          Ok(#(InputName(input), lexer |> advance(rest)))
         }
         False -> Error(glazed_corn.InvalidFormat)
       }
     }
     "'" <> rest -> {
-      case quoted_key_splitter |> splitter.split(rest) {
-        #(before, "'", after) -> #(Key(before), after) |> Ok
+      case lexer.quoted_key_splitter |> splitter.split(rest) {
+        #(before, "'", after) -> #(Key(before), lexer |> advance(after)) |> Ok
         _ -> Error(glazed_corn.InvalidFormat)
       }
     }
-    _ -> {
+
+    source -> {
       let #(keyword, rest) = source |> lex_keyword("")
 
       case keyword {
-        "let" -> #(Let, rest) |> Ok
-        "in" -> #(In, rest) |> Ok
-        "null" -> #(Null, rest) |> Ok
-        "false" -> #(Boolean(False), rest) |> Ok
-        "true" -> #(Boolean(True), rest) |> Ok
-
+        "let" -> #(Let, lexer |> advance(rest)) |> Ok
+        "in" -> #(In, lexer |> advance(rest)) |> Ok
+        "null" -> #(Null, lexer |> advance(rest)) |> Ok
+        "false" -> #(Boolean(False), lexer |> advance(rest)) |> Ok
+        "true" -> #(Boolean(True), lexer |> advance(rest)) |> Ok
         _ -> {
-          let #(before, split, after) = key_splitter |> splitter.split(source)
-
-          Ok(#(Key(before), split <> after))
+          let #(before, split, after) =
+            lexer.key_splitter |> splitter.split(source)
+          Ok(#(Key(before), lexer |> advance(split <> after)))
         }
       }
     }
@@ -333,29 +356,28 @@ fn lex_input_name(source: String, acc: String) -> #(String, String) {
 }
 
 fn lex_num(
-  source: String,
+  lexer: Lexer,
   negative: Bool,
-) -> Result(#(Token, String), glazed_corn.ParseError) {
-  let float_splitter = splitter.new([".", ..whitespace_codepoints])
-
-  let #(before, split, after) = float_splitter |> splitter.split(source)
+) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+  let #(before, split, after) =
+    lexer.float_splitter |> splitter.split(lexer.source)
 
   case split {
     "." -> {
       let #(num, rest) = after |> string.trim_start |> split_float("")
 
       float.parse(before <> "." <> num)
-      |> result.map(fn(f) { #(Float(f), rest) })
+      |> result.map(fn(f) { #(Float(f), lexer |> advance(rest)) })
       |> result.replace_error(glazed_corn.InvalidFormat)
     }
     _ -> {
-      let #(num, rest) = source |> string.trim_start |> parse_num(0)
+      let #(num, rest) = lexer.source |> string.trim_start |> parse_num(0)
 
       case rest {
         "" <> rest -> {
           case negative {
-            False -> Ok(#(Integer(num), rest))
-            True -> Ok(#(Integer(-num), rest))
+            False -> Ok(#(Integer(num), lexer |> advance(rest)))
+            True -> Ok(#(Integer(-num), lexer |> advance(rest)))
           }
         }
         _ -> Error(glazed_corn.InvalidFormat)
