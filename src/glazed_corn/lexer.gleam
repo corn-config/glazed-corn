@@ -1,61 +1,15 @@
 import glazed_corn
+import glazed_corn/token.{
+  type Token, Boolean, Chain, CloseBrace, CloseBracket, Comment, Eof, Equals,
+  Float, In, InputName, Integer, Key, Let, Literal, Null, OpenBrace, OpenBracket,
+  Spread,
+}
+
 import gleam/float
-import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
 import splitter.{type Splitter}
-
-pub type Token {
-  Let
-  In
-  Null
-  Equals
-  OpenBrace
-  CloseBrace
-  OpenBracket
-  CloseBracket
-  Spread
-  Chain
-  Boolean(Bool)
-  Integer(Int)
-  Float(Float)
-  InputName(String)
-  Literal(String)
-  // Literal(Vec<StringPart<'input>>),
-  Key(String)
-  Comment(String)
-  Eof
-}
-
-pub fn token_to_string(token: Token) -> String {
-  case token {
-    Let -> "Let"
-    In -> "In"
-    Null -> "Null"
-    Equals -> "Equals"
-    OpenBrace -> "OpenBrace"
-    CloseBrace -> "CloseBrace"
-    OpenBracket -> "OpenBracket"
-    CloseBracket -> "CloseBracket"
-    Spread -> "Spread"
-    Chain -> "Chain"
-    Boolean(b) ->
-      "Boolean("
-      <> case b {
-        True -> "True"
-        False -> "False"
-      }
-      <> ")"
-    Integer(i) -> "Integer(" <> int.to_string(i) <> ")"
-    Float(f) -> "Float(" <> float.to_string(f) <> ")"
-    InputName(s) -> "InputName(\"" <> s <> "\")"
-    Literal(s) -> "Literal(\"" <> s <> "\")"
-    Key(s) -> "Key(\"" <> s <> "\")"
-    Comment(s) -> "Comment(\"" <> s <> "\")"
-    Eof -> "Eof"
-  }
-}
 
 const whitespace_codepoints: List(String) = [
   // Tab

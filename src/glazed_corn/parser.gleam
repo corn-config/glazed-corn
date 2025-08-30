@@ -1,5 +1,5 @@
 import glazed_corn
-import glazed_corn/lexer.{type Token}
+import glazed_corn/token.{type Token}
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/result
@@ -26,7 +26,7 @@ pub type EntryOrSpread {
 
 pub fn parse_tokens(tokens: List(Token)) -> Result(Root, glazed_corn.ParseError) {
   case tokens {
-    [lexer.Let, lexer.OpenBrace, ..rest] -> {
+    [token.Let, token.OpenBrace, ..rest] -> {
       use #(inputs, rest) <- result.try(parse_inputs(rest, dict.new()))
       use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
 
@@ -35,7 +35,7 @@ pub fn parse_tokens(tokens: List(Token)) -> Result(Root, glazed_corn.ParseError)
         False -> Error(glazed_corn.InvalidFormat)
       }
     }
-    [lexer.OpenBrace, ..rest] -> {
+    [token.OpenBrace, ..rest] -> {
       use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
 
       case rest |> list.is_empty {
@@ -53,17 +53,16 @@ fn parse_inputs(
   inputs: Dict(String, Entry),
 ) -> Result(#(Dict(String, Entry), List(Token)), glazed_corn.ParseError) {
   case tokens {
-    [lexer.CloseBrace, lexer.In, lexer.OpenBrace, ..rest] ->
+    [token.CloseBrace, token.In, token.OpenBrace, ..rest] ->
       #(inputs, rest) |> Ok
-    [lexer.InputName(key), lexer.Equals, ..rest] -> {
+    [token.InputName(key), token.Equals, ..rest] -> {
       use #(value, rest) <- result.try(rest |> parse_entry)
 
       parse_inputs(rest, inputs |> dict.insert(key, value))
     }
-    [lexer.Comment(_), ..rest] -> parse_inputs(rest, inputs)
+    [token.Comment(_), ..rest] -> parse_inputs(rest, inputs)
     [] -> Error(glazed_corn.UnexpectedEof)
-    [token, ..] ->
-      Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
+    [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
   }
 }
 
@@ -71,18 +70,17 @@ fn parse_entry(
   tokens: List(Token),
 ) -> Result(#(Entry, List(Token)), glazed_corn.ParseError) {
   case tokens {
-    [lexer.Literal(lit), ..rest] -> #(String(lit), rest) |> Ok
-    [lexer.Integer(int), ..rest] -> #(Integer(int), rest) |> Ok
-    [lexer.Float(float), ..rest] -> #(Float(float), rest) |> Ok
-    [lexer.Boolean(bool), ..rest] -> #(Boolean(bool), rest) |> Ok
-    [lexer.OpenBrace, ..rest] -> rest |> parse_object
-    [lexer.OpenBracket, ..rest] -> rest |> parse_array
-    [lexer.Null, ..rest] -> #(Null, rest) |> Ok
-    [lexer.InputName(input), ..rest] -> #(Input(input), rest) |> Ok
-    [lexer.Comment(_), ..rest] -> parse_entry(rest)
+    [token.Literal(lit), ..rest] -> #(String(lit), rest) |> Ok
+    [token.Integer(int), ..rest] -> #(Integer(int), rest) |> Ok
+    [token.Float(float), ..rest] -> #(Float(float), rest) |> Ok
+    [token.Boolean(bool), ..rest] -> #(Boolean(bool), rest) |> Ok
+    [token.OpenBrace, ..rest] -> rest |> parse_object
+    [token.OpenBracket, ..rest] -> rest |> parse_array
+    [token.Null, ..rest] -> #(Null, rest) |> Ok
+    [token.InputName(input), ..rest] -> #(Input(input), rest) |> Ok
+    [token.Comment(_), ..rest] -> parse_entry(rest)
     [] -> Error(glazed_corn.UnexpectedEof)
-    [token, ..] ->
-      Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
+    [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
   }
 }
 
@@ -100,16 +98,15 @@ fn do_parse_object(
   object: Dict(String, Entry),
 ) -> Result(#(Dict(String, Entry), List(Token)), glazed_corn.ParseError) {
   case tokens {
-    [lexer.CloseBrace, ..rest] -> #(object, rest) |> Ok
-    [lexer.Key(key), lexer.Equals, ..rest] -> {
+    [token.CloseBrace, ..rest] -> #(object, rest) |> Ok
+    [token.Key(key), token.Equals, ..rest] -> {
       use #(value, rest) <- result.try(rest |> parse_entry)
 
       do_parse_object(rest, object |> dict.insert(key, value))
     }
-    [lexer.Comment(_), ..rest] -> do_parse_object(rest, object)
+    [token.Comment(_), ..rest] -> do_parse_object(rest, object)
     [] -> Error(glazed_corn.UnexpectedEof)
-    [token, ..] ->
-      Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
+    [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
   }
 }
 
@@ -127,8 +124,8 @@ fn do_parse_array(
   array: List(EntryOrSpread),
 ) -> Result(#(List(EntryOrSpread), List(Token)), glazed_corn.ParseError) {
   case tokens {
-    [lexer.CloseBracket, ..rest] -> #(array, rest) |> Ok
-    [lexer.Spread, lexer.InputName(input), ..rest] ->
+    [token.CloseBracket, ..rest] -> #(array, rest) |> Ok
+    [token.Spread, token.InputName(input), ..rest] ->
       do_parse_array(rest, [Spread(input), ..array])
     _ -> {
       use #(value, rest) <- result.try(tokens |> parse_entry)
