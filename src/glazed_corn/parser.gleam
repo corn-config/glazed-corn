@@ -5,7 +5,7 @@ import gleam/list
 import gleam/result
 
 pub type Root {
-  Root(inputs: Dict(String, Entry), object: Dict(String, Entry))
+  Root(inputs: Dict(String, Entry), object: List(PairOrSpread))
 }
 
 pub type Entry {
@@ -13,22 +13,27 @@ pub type Entry {
   Integer(Int)
   Float(Float)
   Boolean(Bool)
-  Object(pairs: Dict(String, Entry))
+  Object(pairs: List(PairOrSpread))
   Array(List(EntryOrSpread))
   Null
   Input(String)
 }
 
 pub type EntryOrSpread {
-  Entry(Entry)
-  Spread(String)
+  ArrayEntry(Entry)
+  ArraySpread(String)
+}
+
+pub type PairOrSpread {
+  Pair(String, Entry)
+  ObjectSpread(String)
 }
 
 pub fn parse_tokens(tokens: List(Token)) -> Result(Root, glazed_corn.ParseError) {
   case tokens {
     [token.Let, token.OpenBrace, ..rest] -> {
       use #(inputs, rest) <- result.try(parse_inputs(rest, dict.new()))
-      use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
+      use #(object, rest) <- result.try(do_parse_object(rest, []))
 
       case rest |> list.is_empty {
         True -> Ok(Root(inputs:, object:))
@@ -36,7 +41,7 @@ pub fn parse_tokens(tokens: List(Token)) -> Result(Root, glazed_corn.ParseError)
       }
     }
     [token.OpenBrace, ..rest] -> {
-      use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
+      use #(object, rest) <- result.try(do_parse_object(rest, []))
 
       case rest |> list.is_empty {
         True -> Ok(Root(inputs: dict.new(), object:))
@@ -87,23 +92,25 @@ fn parse_entry(
 fn parse_object(
   tokens: List(Token),
 ) -> Result(#(Entry, List(Token)), glazed_corn.ParseError) {
-  case do_parse_object(tokens, dict.new()) {
-    Ok(#(object, rest)) -> #(object |> Object, rest) |> Ok
+  case do_parse_object(tokens, []) {
+    Ok(#(object, rest)) -> #(object |> list.reverse |> Object, rest) |> Ok
     Error(err) -> Error(err)
   }
 }
 
 fn do_parse_object(
   tokens: List(Token),
-  object: Dict(String, Entry),
-) -> Result(#(Dict(String, Entry), List(Token)), glazed_corn.ParseError) {
+  object: List(PairOrSpread),
+) -> Result(#(List(PairOrSpread), List(Token)), glazed_corn.ParseError) {
   case tokens {
     [token.CloseBrace, ..rest] -> #(object, rest) |> Ok
     [token.Key(key), token.Equals, ..rest] -> {
       use #(value, rest) <- result.try(rest |> parse_entry)
 
-      do_parse_object(rest, object |> dict.insert(key, value))
+      do_parse_object(rest, [Pair(key, value), ..object])
     }
+    [token.Spread, token.InputName(input), ..rest] ->
+      do_parse_object(rest, [ObjectSpread(input), ..object])
     [token.Comment(_), ..rest] -> do_parse_object(rest, object)
     [] -> Error(glazed_corn.UnexpectedEof)
     [token, ..] -> Error(glazed_corn.UnexpectedToken(token.to_string(token)))
@@ -126,11 +133,11 @@ fn do_parse_array(
   case tokens {
     [token.CloseBracket, ..rest] -> #(array, rest) |> Ok
     [token.Spread, token.InputName(input), ..rest] ->
-      do_parse_array(rest, [Spread(input), ..array])
+      do_parse_array(rest, [ArraySpread(input), ..array])
     _ -> {
       use #(value, rest) <- result.try(tokens |> parse_entry)
 
-      do_parse_array(rest, [Entry(value), ..array])
+      do_parse_array(rest, [ArrayEntry(value), ..array])
     }
   }
 }
