@@ -95,7 +95,6 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
   let new_line_splitter = splitter.new(["\n", "\r\n"])
   let string_splitter = splitter.new(["\""])
   let key_splitter = splitter.new(["=", ".", ..whitespace_codepoints])
-  let whitespace_splitter = splitter.new(whitespace_codepoints)
 
   case source {
     "" -> #(Eof, "") |> Ok
@@ -143,14 +142,14 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
       }
     }
     _ -> {
-      let #(before, _, after) = whitespace_splitter |> splitter.split(source)
+      let #(keyword, rest) = source |> lex_keyword("")
 
-      case before {
-        "let" -> #(Let, after) |> Ok
-        "in" -> #(In, after) |> Ok
-        "null" -> #(Null, after) |> Ok
-        "false" -> #(Boolean(False), after) |> Ok
-        "true" -> #(Boolean(True), after) |> Ok
+      case keyword {
+        "let" -> #(Let, rest) |> Ok
+        "in" -> #(In, rest) |> Ok
+        "null" -> #(Null, rest) |> Ok
+        "false" -> #(Boolean(False), rest) |> Ok
+        "true" -> #(Boolean(True), rest) |> Ok
 
         _ -> {
           let #(before, split, after) = key_splitter |> splitter.split(source)
@@ -159,6 +158,39 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
         }
       }
     }
+  }
+}
+
+fn lex_keyword(source: String, keyword: String) -> #(String, String) {
+  case source {
+    "a" as character <> rest
+    | "b" as character <> rest
+    | "c" as character <> rest
+    | "d" as character <> rest
+    | "e" as character <> rest
+    | "f" as character <> rest
+    | "g" as character <> rest
+    | "h" as character <> rest
+    | "i" as character <> rest
+    | "j" as character <> rest
+    | "k" as character <> rest
+    | "l" as character <> rest
+    | "m" as character <> rest
+    | "n" as character <> rest
+    | "o" as character <> rest
+    | "p" as character <> rest
+    | "q" as character <> rest
+    | "r" as character <> rest
+    | "s" as character <> rest
+    | "t" as character <> rest
+    | "u" as character <> rest
+    | "v" as character <> rest
+    | "w" as character <> rest
+    | "x" as character <> rest
+    | "y" as character <> rest
+    | "z" as character <> rest -> lex_keyword(rest, keyword <> character)
+
+    _ -> #(keyword, source)
   }
 }
 
