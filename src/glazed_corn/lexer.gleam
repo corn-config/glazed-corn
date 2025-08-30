@@ -1,5 +1,6 @@
 import glazed_corn
 import gleam/float
+import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
@@ -25,6 +26,35 @@ pub type Token {
   Key(String)
   Comment(String)
   Eof
+}
+
+pub fn token_to_string(token: Token) -> String {
+  case token {
+    Let -> "Let"
+    In -> "In"
+    Null -> "Null"
+    Equals -> "Equals"
+    OpenBrace -> "OpenBrace"
+    CloseBrace -> "CloseBrace"
+    OpenBracket -> "OpenBracket"
+    CloseBracket -> "CloseBracket"
+    Spread -> "Spread"
+    Chain -> "Chain"
+    Boolean(b) ->
+      "Boolean("
+      <> case b {
+        True -> "True"
+        False -> "False"
+      }
+      <> ")"
+    Integer(i) -> "Integer(" <> int.to_string(i) <> ")"
+    Float(f) -> "Float(" <> float.to_string(f) <> ")"
+    InputName(s) -> "InputName(\"" <> s <> "\")"
+    Literal(s) -> "Literal(\"" <> s <> "\")"
+    Key(s) -> "Key(\"" <> s <> "\")"
+    Comment(s) -> "Comment(\"" <> s <> "\")"
+    Eof -> "Eof"
+  }
 }
 
 const whitespace_codepoints: List(String) = [
