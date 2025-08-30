@@ -11,16 +11,16 @@ type Test {
 fn test_to_string(test_case: Test) -> String {
   case test_case {
     Fail(name:, corn_path:) -> "pub fn " <> name <> "() {
-let assert Ok(corn_source) = read_bits(\"" <> corn_path <> "\")
-let assert Error(_) = glazed_corn.parse_bits(corn_source)
+let assert Ok(corn_source) = read(\"" <> corn_path <> "\")
+let assert Error(_) = glazed_corn.parse(corn_source)
 }
 "
     Pass(name:, corn_path:, json_path:) -> "pub fn " <> name <> "() {
-let assert Ok(corn_source) = read_bits(\"" <> corn_path <> "\")
-let assert Ok(json_source) = read_bits(\"" <> json_path <> "\")
+let assert Ok(corn_source) = read(\"" <> corn_path <> "\")
+let assert Ok(json_source) = read(\"" <> json_path <> "\")
 
-let assert Ok(parsed_corn) = glazed_corn.parse_bits(corn_source)
-let assert Ok(parsed_json) = json.parse_bits(json_source, value.decoder())
+let assert Ok(parsed_corn) = glazed_corn.parse(corn_source)
+let assert Ok(parsed_json) = json.parse(json_source, value.decoder())
 
 assert parsed_corn == parsed_json
 }
@@ -65,7 +65,7 @@ pub fn main() {
 import glazed_corn/value
 import gleam/json
 import gleeunit
-import simplifile.{read_bits}
+import simplifile.{read}
 
 pub fn main() -> Nil {
   gleeunit.main()
