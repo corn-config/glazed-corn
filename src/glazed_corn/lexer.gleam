@@ -144,7 +144,7 @@ fn do_tokenize(
   lexer: Lexer,
   tokens: List(Token),
 ) -> Result(List(Token), glazed_corn.ParseError) {
-  case lexer |> next {
+  case lexer |> advance(lexer.source |> string.trim_start) |> next {
     Ok(#(Eof, _)) -> Ok(tokens |> list.reverse)
     Ok(#(token, lexer)) -> do_tokenize(lexer, [token, ..tokens])
     Error(error) -> Error(error)
@@ -152,7 +152,7 @@ fn do_tokenize(
 }
 
 fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
-  case lexer.source |> string.trim_start {
+  case lexer.source {
     "" -> #(Eof, lexer) |> Ok
 
     "=" <> rest -> #(Equals, lexer |> advance(rest)) |> Ok
