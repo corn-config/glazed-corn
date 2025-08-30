@@ -95,13 +95,11 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
   let new_line_splitter = splitter.new(["\n", "\r\n"])
   let string_splitter = splitter.new(["\""])
   let key_splitter = splitter.new(["=", ".", ..whitespace_codepoints])
+  let whitespace_splitter = splitter.new(whitespace_codepoints)
 
   case source {
     "" -> #(Eof, "") |> Ok
 
-    "let" <> rest -> #(Let, rest) |> Ok
-    "in" <> rest -> #(In, rest) |> Ok
-    "null" <> rest -> #(Null, rest) |> Ok
     "=" <> rest -> #(Equals, rest) |> Ok
     "{" <> rest -> #(OpenBrace, rest) |> Ok
     "}" <> rest -> #(CloseBrace, rest) |> Ok
@@ -109,8 +107,6 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
     "]" <> rest -> #(CloseBracket, rest) |> Ok
     ".." <> rest -> #(Spread, rest) |> Ok
     "." <> rest -> #(Chain, rest) |> Ok
-    "false" <> rest -> #(Boolean(False), rest) |> Ok
-    "true" <> rest -> #(Boolean(True), rest) |> Ok
 
     "//" <> rest -> {
       let #(before, _split, after) = new_line_splitter |> splitter.split(rest)
@@ -146,11 +142,22 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
         False -> Error(glazed_corn.InvalidFormat)
       }
     }
+    _ -> {
+      let #(before, _, after) = whitespace_splitter |> splitter.split(source)
 
-    rest -> {
-      let #(before, split, after) = splitter.split(key_splitter, rest)
+      case before {
+        "let" -> #(Let, after) |> Ok
+        "in" -> #(In, after) |> Ok
+        "null" -> #(Null, after) |> Ok
+        "false" -> #(Boolean(False), after) |> Ok
+        "true" -> #(Boolean(True), after) |> Ok
 
-      Ok(#(Key(before), split <> after))
+        _ -> {
+          let #(before, split, after) = key_splitter |> splitter.split(source)
+
+          Ok(#(Key(before), split <> after))
+        }
+      }
     }
   }
 }
