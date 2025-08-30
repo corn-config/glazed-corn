@@ -6,6 +6,7 @@ import glazed_corn/token.{
 }
 
 import gleam/float
+import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
@@ -128,7 +129,16 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
       #(Literal(before |> string.trim_start), lexer |> advance(after)) |> Ok
     }
 
-    "-" <> rest -> lex_num(lexer |> advance(rest), True)
+    "-0x" <> rest -> lex_num_radix(lexer |> advance(rest), True, 16)
+    "0x" <> rest -> lex_num_radix(lexer |> advance(rest), False, 16)
+
+    "-0o" <> rest -> lex_num_radix(lexer |> advance(rest), True, 8)
+    "0o" <> rest -> lex_num_radix(lexer |> advance(rest), False, 8)
+
+    "-0b" <> rest -> lex_num_radix(lexer |> advance(rest), True, 2)
+    "0b" <> rest -> lex_num_radix(lexer |> advance(rest), False, 2)
+
+    "-" <> rest -> lex_num_radix(lexer |> advance(rest), True, 10)
     "0" <> _
     | "1" <> _
     | "2" <> _
@@ -138,7 +148,7 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
     | "6" <> _
     | "7" <> _
     | "8" <> _
-    | "9" <> _ -> lex_num(lexer, False)
+    | "9" <> _ -> lex_num_radix(lexer, False, 10)
 
     "$" <> name -> {
       case name |> is_valid_start {
@@ -339,9 +349,10 @@ fn lex_input_name(source: String, acc: String) -> #(String, String) {
   }
 }
 
-fn lex_num(
+fn lex_num_radix(
   lexer: Lexer,
   negative: Bool,
+  radix: Int,
 ) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
   let #(before, split, after) =
     lexer.float_splitter |> splitter.split(lexer.source)
@@ -355,10 +366,10 @@ fn lex_num(
       |> result.replace_error(glazed_corn.InvalidFormat)
     }
     _ -> {
-      let #(num, rest) = lexer.source |> string.trim_start |> parse_num(0)
+      let #(num, rest) = lexer.source |> extract_number("")
 
-      case rest {
-        "" <> rest -> {
+      case num |> int.base_parse(radix) {
+        Ok(num) -> {
           case negative {
             False -> Ok(#(Integer(num), lexer |> advance(rest)))
             True -> Ok(#(Integer(-num), lexer |> advance(rest)))
@@ -388,19 +399,33 @@ fn split_float(source: String, lex: String) -> #(String, String) {
   }
 }
 
-fn parse_num(source: String, significand: Int) -> #(Int, String) {
+fn extract_number(source: String, acc: String) -> #(String, String) {
   case source {
-    "0" <> rest -> parse_num(rest, significand * 10)
-    "1" <> rest -> parse_num(rest, significand * 10 + 1)
-    "2" <> rest -> parse_num(rest, significand * 10 + 2)
-    "3" <> rest -> parse_num(rest, significand * 10 + 3)
-    "4" <> rest -> parse_num(rest, significand * 10 + 4)
-    "5" <> rest -> parse_num(rest, significand * 10 + 5)
-    "6" <> rest -> parse_num(rest, significand * 10 + 6)
-    "7" <> rest -> parse_num(rest, significand * 10 + 7)
-    "8" <> rest -> parse_num(rest, significand * 10 + 8)
-    "9" <> rest -> parse_num(rest, significand * 10 + 9)
-    "_" <> rest -> parse_num(rest, significand)
-    rest -> #(significand, rest)
+    "0" as c <> rest
+    | "1" as c <> rest
+    | "2" as c <> rest
+    | "3" as c <> rest
+    | "4" as c <> rest
+    | "5" as c <> rest
+    | "6" as c <> rest
+    | "7" as c <> rest
+    | "8" as c <> rest
+    | "9" as c <> rest
+    | "a" as c <> rest
+    | "b" as c <> rest
+    | "c" as c <> rest
+    | "d" as c <> rest
+    | "e" as c <> rest
+    | "f" as c <> rest
+    | "A" as c <> rest
+    | "B" as c <> rest
+    | "C" as c <> rest
+    | "D" as c <> rest
+    | "E" as c <> rest
+    | "F" as c <> rest -> extract_number(rest, acc <> c)
+
+    "_" <> rest -> extract_number(rest, acc)
+
+    rest -> #(acc, rest)
   }
 }
