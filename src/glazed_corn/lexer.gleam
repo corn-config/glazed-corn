@@ -95,6 +95,7 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
   let new_line_splitter = splitter.new(["\n", "\r\n"])
   let string_splitter = splitter.new(["\""])
   let key_splitter = splitter.new(["=", ".", ..whitespace_codepoints])
+  let quoted_key_splitter = splitter.new(["'"])
 
   case source {
     "" -> #(Eof, "") |> Ok
@@ -139,6 +140,12 @@ fn next(source: String) -> Result(#(Token, String), glazed_corn.ParseError) {
           Ok(#(InputName(input), rest))
         }
         False -> Error(glazed_corn.InvalidFormat)
+      }
+    }
+    "'" <> rest -> {
+      case quoted_key_splitter |> splitter.split(rest) {
+        #(before, "'", after) -> #(Key(before), after) |> Ok
+        _ -> Error(glazed_corn.InvalidFormat)
       }
     }
     _ -> {
