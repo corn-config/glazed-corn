@@ -14,7 +14,7 @@ pub type Entry {
   Float(Float)
   Boolean(Bool)
   Object(pairs: Dict(String, Entry))
-  Array(List(Entry))
+  Array(List(EntryOrSpread))
   Null
   Input(String)
 }
@@ -24,7 +24,50 @@ pub type EntryOrSpread {
   Spread(String)
 }
 
-pub fn parse_entry(
+pub fn parse_tokens(tokens: List(Token)) -> Result(Root, glazed_corn.ParseError) {
+  case tokens {
+    [lexer.Let, lexer.OpenBrace, ..rest] -> {
+      use #(inputs, rest) <- result.try(parse_inputs(rest, dict.new()))
+      use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
+
+      case rest |> list.is_empty {
+        True -> Ok(Root(inputs:, object:))
+        False -> Error(glazed_corn.InvalidFormat)
+      }
+    }
+    [lexer.OpenBrace, ..rest] -> {
+      use #(object, rest) <- result.try(do_parse_object(rest, dict.new()))
+
+      case rest |> list.is_empty {
+        True -> Ok(Root(inputs: dict.new(), object:))
+        False -> Error(glazed_corn.InvalidFormat)
+      }
+    }
+
+    _ -> Error(glazed_corn.InvalidFormat)
+  }
+}
+
+fn parse_inputs(
+  tokens: List(Token),
+  inputs: Dict(String, Entry),
+) -> Result(#(Dict(String, Entry), List(Token)), glazed_corn.ParseError) {
+  case tokens {
+    [lexer.CloseBrace, lexer.In, lexer.OpenBrace, ..rest] ->
+      #(inputs, rest) |> Ok
+    [lexer.InputName(key), lexer.Equals, ..rest] -> {
+      use #(value, rest) <- result.try(rest |> parse_entry)
+
+      parse_inputs(rest, inputs |> dict.insert(key, value))
+    }
+    [lexer.Comment(_), ..rest] -> parse_inputs(rest, inputs)
+    [] -> Error(glazed_corn.UnexpectedEof)
+    [token, ..] ->
+      Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
+  }
+}
+
+fn parse_entry(
   tokens: List(Token),
 ) -> Result(#(Entry, List(Token)), glazed_corn.ParseError) {
   case tokens {
@@ -32,9 +75,11 @@ pub fn parse_entry(
     [lexer.Integer(int), ..rest] -> #(Integer(int), rest) |> Ok
     [lexer.Float(float), ..rest] -> #(Float(float), rest) |> Ok
     [lexer.Boolean(bool), ..rest] -> #(Boolean(bool), rest) |> Ok
-    [lexer.OpenBrace, ..rest] -> parse_object(rest, dict.new())
-    [lexer.OpenBracket, ..rest] -> parse_array(rest)
+    [lexer.OpenBrace, ..rest] -> rest |> parse_object
+    [lexer.OpenBracket, ..rest] -> rest |> parse_array
     [lexer.Null, ..rest] -> #(Null, rest) |> Ok
+    [lexer.InputName(input), ..rest] -> #(Input(input), rest) |> Ok
+    [lexer.Comment(_), ..rest] -> parse_entry(rest)
     [] -> Error(glazed_corn.UnexpectedEof)
     [token, ..] ->
       Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
@@ -43,16 +88,28 @@ pub fn parse_entry(
 
 fn parse_object(
   tokens: List(Token),
-  object: Dict(String, Entry),
 ) -> Result(#(Entry, List(Token)), glazed_corn.ParseError) {
+  case do_parse_object(tokens, dict.new()) {
+    Ok(#(object, rest)) -> #(object |> Object, rest) |> Ok
+    Error(err) -> Error(err)
+  }
+}
+
+fn do_parse_object(
+  tokens: List(Token),
+  object: Dict(String, Entry),
+) -> Result(#(Dict(String, Entry), List(Token)), glazed_corn.ParseError) {
   case tokens {
-    [lexer.CloseBrace, ..rest] -> #(Object(object), rest) |> Ok
+    [lexer.CloseBrace, ..rest] -> #(object, rest) |> Ok
     [lexer.Key(key), lexer.Equals, ..rest] -> {
       use #(value, rest) <- result.try(rest |> parse_entry)
 
-      parse_object(rest, object |> dict.insert(key, value))
+      do_parse_object(rest, object |> dict.insert(key, value))
     }
-    _ -> todo
+    [lexer.Comment(_), ..rest] -> do_parse_object(rest, object)
+    [] -> Error(glazed_corn.UnexpectedEof)
+    [token, ..] ->
+      Error(glazed_corn.UnexpectedToken(lexer.token_to_string(token)))
   }
 }
 
@@ -67,15 +124,16 @@ fn parse_array(
 
 fn do_parse_array(
   tokens: List(Token),
-  array: List(Entry),
-) -> Result(#(List(Entry), List(Token)), glazed_corn.ParseError) {
+  array: List(EntryOrSpread),
+) -> Result(#(List(EntryOrSpread), List(Token)), glazed_corn.ParseError) {
   case tokens {
     [lexer.CloseBracket, ..rest] -> #(array, rest) |> Ok
-
+    [lexer.Spread, lexer.InputName(input), ..rest] ->
+      do_parse_array(rest, [Spread(input), ..array])
     _ -> {
       use #(value, rest) <- result.try(tokens |> parse_entry)
 
-      do_parse_array(rest, [value, ..array])
+      do_parse_array(rest, [Entry(value), ..array])
     }
   }
 }
