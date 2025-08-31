@@ -204,7 +204,7 @@ fn lex_literal(
     "\\n" -> lex_literal(advance(lexer, after), acc <> before <> "\n")
     "\\r" -> lex_literal(advance(lexer, after), acc <> before <> "\r")
     "\\t" -> lex_literal(advance(lexer, after), acc <> before <> "\t")
-    _ -> #(Literal(acc), lexer |> advance(after)) |> Ok
+    _ -> #(Literal(acc <> before), lexer |> advance(after)) |> Ok
   }
 }
 
