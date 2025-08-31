@@ -6,4 +6,5 @@ pub type ParseError {
   MissingInput(String)
   InvalidSpread
   InvalidChain
+  InvalidCodepoint(String)
 }
