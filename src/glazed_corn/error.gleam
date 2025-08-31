@@ -5,4 +5,5 @@ pub type ParseError {
   UnexpectedEof
   MissingInput(String)
   InvalidSpread
+  InvalidChain
 }

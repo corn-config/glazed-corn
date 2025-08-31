@@ -73,7 +73,7 @@ fn do_evaluate_array(
   acc: List(Value),
 ) -> Result(List(Value), error.ParseError) {
   case pairs {
-    [] -> Ok(acc)
+    [] -> Ok(acc |> list.reverse)
     [first, ..rest] -> {
       case first {
         ArraySpread(spread) -> {
@@ -81,7 +81,7 @@ fn do_evaluate_array(
 
           case entry |> do_evaluate(inputs) {
             Ok(value.Array(array)) ->
-              do_evaluate_array(rest, inputs, array |> list.append(array))
+              do_evaluate_array(rest, inputs, acc |> list.append(array))
             Ok(_) -> Error(error.InvalidSpread)
             Error(err) -> Error(err)
           }
@@ -125,13 +125,42 @@ fn do_evaluate_object(
             Error(err) -> Error(err)
           }
         }
-        parser.Pair(_key, entry) -> {
-          // FIXME: do key chaining
+        parser.Pair(path, entry) -> {
           use value <- result.try(do_evaluate(entry, inputs))
+          use object <- result.try(acc |> insert_at_path(path, value))
 
-          do_evaluate_object(rest, inputs, acc |> dict.insert("key", value))
+          do_evaluate_object(rest, inputs, object)
         }
       }
     }
+  }
+}
+
+fn insert_at_path(
+  object: Dict(String, Value),
+  path: List(String),
+  value: Value,
+) -> Result(Dict(String, Value), error.ParseError) {
+  case path {
+    [key] -> {
+      object |> dict.insert(key, value) |> Ok
+    }
+    [first, ..rest] -> {
+      let entry =
+        object
+        |> dict.get(first)
+        |> result.lazy_unwrap(fn() { value.Object(dict.new()) })
+
+      case entry {
+        value.Object(nested_object) -> {
+          use nested_object <- result.try(
+            nested_object |> insert_at_path(rest, value),
+          )
+          object |> dict.insert(first, value.Object(nested_object)) |> Ok
+        }
+        _ -> Error(error.InvalidChain)
+      }
+    }
+    [] -> Ok(dict.new())
   }
 }
