@@ -4,6 +4,7 @@ import glazed_corn/parser.{
   type Entry, type EntryOrSpread, type PairOrSpread, type Root, ArrayEntry,
   ArraySpread,
 }
+import glazed_corn/token
 import glazed_corn/value.{type Value}
 import gleam/dict.{type Dict}
 import gleam/list
@@ -28,30 +29,42 @@ fn do_evaluate(
     parser.Integer(integer) -> Ok(value.Integer(integer))
     parser.Null -> Ok(value.Null)
     parser.Object(pairs:) -> pairs |> evaluate_object(inputs)
-    parser.String(string) -> Ok(value.String(string))
+    parser.String(parts) -> parts |> evaluate_string(inputs)
   }
 }
 
-fn get_input(
+fn evaluate_string(
+  parts: List(token.StringPart),
   inputs: Dict(String, Entry),
-  input: String,
-) -> Result(Entry, error.ParseError) {
-  case input {
-    "env_" <> env -> {
-      case envoy.get(env) {
-        Error(_) -> {
-          case inputs |> dict.get(input) {
-            Ok(entry) -> Ok(entry)
-            Error(_) -> Error(error.MissingInput(input))
+) -> Result(Value, error.ParseError) {
+  case do_evaluate_string(parts, inputs, "") {
+    Ok(string) -> Ok(value.String(string))
+    Error(err) -> Error(err)
+  }
+}
+
+fn do_evaluate_string(
+  parts: List(token.StringPart),
+  inputs: Dict(String, Entry),
+  acc: String,
+) -> Result(String, error.ParseError) {
+  case parts {
+    [] -> Ok(acc)
+    [first, ..rest] -> {
+      case first {
+        token.InputPart(input) -> {
+          use entry <- result.try(inputs |> get_input(input))
+
+          case entry |> do_evaluate(inputs) {
+            Ok(value.String(string)) ->
+              do_evaluate_string(rest, inputs, acc <> string)
+            Ok(_) -> Error(error.InvalidFormat)
+            Error(err) -> Error(err)
           }
         }
-        Ok(env) -> Ok(parser.String(env))
-      }
-    }
-    _ -> {
-      case inputs |> dict.get(input) {
-        Ok(entry) -> Ok(entry)
-        Error(_) -> Error(error.MissingInput(input))
+        token.LiteralPart(part) -> {
+          do_evaluate_string(rest, inputs, acc <> part)
+        }
       }
     }
   }
@@ -168,5 +181,30 @@ fn insert_at_path(
       }
     }
     [] -> Ok(dict.new())
+  }
+}
+
+fn get_input(
+  inputs: Dict(String, Entry),
+  input: String,
+) -> Result(Entry, error.ParseError) {
+  case input {
+    "env_" <> env -> {
+      case envoy.get(env) {
+        Error(_) -> {
+          case inputs |> dict.get(input) {
+            Ok(entry) -> Ok(entry)
+            Error(_) -> Error(error.MissingInput(input))
+          }
+        }
+        Ok(env) -> Ok(parser.String([token.LiteralPart(env)]))
+      }
+    }
+    _ -> {
+      case inputs |> dict.get(input) {
+        Ok(entry) -> Ok(entry)
+        Error(_) -> Error(error.MissingInput(input))
+      }
+    }
   }
 }

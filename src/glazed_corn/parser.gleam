@@ -9,7 +9,7 @@ pub type Root {
 }
 
 pub type Entry {
-  String(String)
+  String(List(token.StringPart))
   Integer(Int)
   Float(Float)
   Boolean(Bool)
@@ -75,7 +75,7 @@ fn parse_entry(
   tokens: List(Token),
 ) -> Result(#(Entry, List(Token)), error.ParseError) {
   case tokens {
-    [token.Literal(lit), ..rest] -> #(String(lit), rest) |> Ok
+    [token.String(parts), ..rest] -> #(String(parts), rest) |> Ok
     [token.Integer(int), ..rest] -> #(Integer(int), rest) |> Ok
     [token.Float(float), ..rest] -> #(Float(float), rest) |> Ok
     [token.Boolean(bool), ..rest] -> #(Boolean(bool), rest) |> Ok

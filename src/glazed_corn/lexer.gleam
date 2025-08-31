@@ -1,8 +1,8 @@
 import glazed_corn/error
 import glazed_corn/token.{
-  type Token, Boolean, Chain, CloseBrace, CloseBracket, Comment, Eof, Equals,
-  Float, In, InputName, Integer, Key, Let, Literal, Null, OpenBrace, OpenBracket,
-  Spread,
+  type StringPart, type Token, Boolean, Chain, CloseBrace, CloseBracket, Comment,
+  Eof, Equals, Float, In, InputName, InputPart, Integer, Key, Let, LiteralPart,
+  Null, OpenBrace, OpenBracket, Spread, String,
 }
 
 import gleam/float
@@ -80,7 +80,16 @@ pub fn new(source: String) -> Lexer {
   Lexer(
     source:,
     new_line_splitter: splitter.new(["\n", "\r\n"]),
-    string_splitter: splitter.new(["\\\\", "\\\"", "\\n", "\\r", "\\t", "\""]),
+    string_splitter: splitter.new([
+      "\\\\",
+      "\\\"",
+      "\\n",
+      "\\r",
+      "\\t",
+      // "\\u{",
+      "${",
+      "\"",
+    ]),
     key_splitter: splitter.new(["=", ".", ..whitespace_codepoints]),
     quoted_key_splitter: splitter.new(["\\'", "'"]),
     float_splitter: splitter.new([".", ..whitespace_codepoints]),
@@ -124,7 +133,7 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), error.ParseError) {
       #(Comment(before |> string.trim_start), lexer |> advance(after)) |> Ok
     }
 
-    "\"" <> rest -> lex_literal(lexer |> advance(rest), "")
+    "\"" <> rest -> lex_literal(lexer |> advance(rest), [])
 
     "-0x" <> rest -> lex_num_radix(lexer |> advance(rest), True, 16)
     "0x" <> rest -> lex_num_radix(lexer |> advance(rest), False, 16)
@@ -193,18 +202,41 @@ fn lex_quoted_key(
 
 fn lex_literal(
   lexer: Lexer,
-  acc: String,
+  acc: List(StringPart),
 ) -> Result(#(Token, Lexer), error.ParseError) {
+  let interpolation_splitter = splitter.new(["}"])
+
   let #(before, split, after) =
     lexer.string_splitter |> splitter.split(lexer.source)
 
   case split {
-    "\\\\" -> lex_literal(advance(lexer, after), acc <> before <> "\\")
-    "\\\"" -> lex_literal(advance(lexer, after), acc <> before <> "\"")
-    "\\n" -> lex_literal(advance(lexer, after), acc <> before <> "\n")
-    "\\r" -> lex_literal(advance(lexer, after), acc <> before <> "\r")
-    "\\t" -> lex_literal(advance(lexer, after), acc <> before <> "\t")
-    _ -> #(Literal(acc <> before), lexer |> advance(after)) |> Ok
+    "\\\\" ->
+      lex_literal(advance(lexer, after), [LiteralPart(before <> "\\"), ..acc])
+    "\\\"" ->
+      lex_literal(advance(lexer, after), [LiteralPart(before <> "\""), ..acc])
+    "\\n" ->
+      lex_literal(advance(lexer, after), [LiteralPart(before <> "\n"), ..acc])
+    "\\r" ->
+      lex_literal(advance(lexer, after), [LiteralPart(before <> "\r"), ..acc])
+    "\\t" ->
+      lex_literal(advance(lexer, after), [LiteralPart(before <> "\t"), ..acc])
+    "${" -> {
+      case interpolation_splitter |> splitter.split(after) {
+        #(input, "}", rest) ->
+          lex_literal(advance(lexer, rest), [
+            InputPart(input),
+            LiteralPart(before),
+            ..acc
+          ])
+        _ -> Error(error.InvalidFormat)
+      }
+    }
+    _ ->
+      #(
+        String([LiteralPart(before), ..acc] |> list.reverse),
+        lexer |> advance(after),
+      )
+      |> Ok
   }
 }
 

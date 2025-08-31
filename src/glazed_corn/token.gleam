@@ -1,5 +1,6 @@
 import gleam/float
 import gleam/int
+import gleam/list
 
 pub type Token {
   Let
@@ -16,11 +17,15 @@ pub type Token {
   Integer(Int)
   Float(Float)
   InputName(String)
-  Literal(String)
-  // Literal(Vec<StringPart<'input>>),
+  String(List(StringPart))
   Key(String)
   Comment(String)
   Eof
+}
+
+pub type StringPart {
+  LiteralPart(String)
+  InputPart(String)
 }
 
 pub fn to_string(token: Token) -> String {
@@ -45,7 +50,16 @@ pub fn to_string(token: Token) -> String {
     Integer(i) -> "Integer(" <> int.to_string(i) <> ")"
     Float(f) -> "Float(" <> float.to_string(f) <> ")"
     InputName(s) -> "InputName(\"" <> s <> "\")"
-    Literal(s) -> "Literal(\"" <> s <> "\")"
+    String(parts) ->
+      "Literal(\""
+      <> parts
+      |> list.fold("", fn(acc, part) {
+        case part {
+          InputPart(part) -> acc <> "${" <> part <> "}"
+          LiteralPart(lit) -> acc <> lit
+        }
+      })
+      <> "\")"
     Key(s) -> "Key(\"" <> s <> "\")"
     Comment(s) -> "Comment(\"" <> s <> "\")"
     Eof -> "Eof"
