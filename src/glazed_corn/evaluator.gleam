@@ -62,7 +62,7 @@ fn evaluate_array(
   inputs: Dict(String, Entry),
 ) -> Result(Value, error.ParseError) {
   case do_evaluate_array(entries, inputs, []) {
-    Ok(array) -> Ok(value.Array(array))
+    Ok(array) -> Ok(value.Array(array |> list.reverse))
     Error(err) -> Error(err)
   }
 }
@@ -73,7 +73,7 @@ fn do_evaluate_array(
   acc: List(Value),
 ) -> Result(List(Value), error.ParseError) {
   case pairs {
-    [] -> Ok(acc |> list.reverse)
+    [] -> Ok(acc)
     [first, ..rest] -> {
       case first {
         ArraySpread(spread) -> {
@@ -81,7 +81,13 @@ fn do_evaluate_array(
 
           case entry |> do_evaluate(inputs) {
             Ok(value.Array(array)) ->
-              do_evaluate_array(rest, inputs, acc |> list.append(array))
+              do_evaluate_array(
+                rest,
+                inputs,
+                array
+                  |> list.reverse
+                  |> list.append(acc),
+              )
             Ok(_) -> Error(error.InvalidSpread)
             Error(err) -> Error(err)
           }
