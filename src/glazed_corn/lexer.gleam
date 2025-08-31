@@ -73,6 +73,7 @@ pub opaque type Lexer {
     key_splitter: Splitter,
     quoted_key_splitter: Splitter,
     float_splitter: Splitter,
+    interpolation_splitter: Splitter,
   )
 }
 
@@ -86,13 +87,14 @@ pub fn new(source: String) -> Lexer {
       "\\n",
       "\\r",
       "\\t",
-      // "\\u{",
+      "\\u{",
       "${",
       "\"",
     ]),
     key_splitter: splitter.new(["=", ".", ..whitespace_codepoints]),
     quoted_key_splitter: splitter.new(["\\'", "'"]),
     float_splitter: splitter.new([".", ..whitespace_codepoints]),
+    interpolation_splitter: splitter.new(["}"]),
   )
 }
 
@@ -204,8 +206,6 @@ fn lex_literal(
   lexer: Lexer,
   acc: List(StringPart),
 ) -> Result(#(Token, Lexer), error.ParseError) {
-  let interpolation_splitter = splitter.new(["}"])
-
   let #(before, split, after) =
     lexer.string_splitter |> splitter.split(lexer.source)
 
@@ -221,13 +221,32 @@ fn lex_literal(
     "\\t" ->
       lex_literal(advance(lexer, after), [LiteralPart(before <> "\t"), ..acc])
     "${" -> {
-      case interpolation_splitter |> splitter.split(after) {
+      case lexer.interpolation_splitter |> splitter.split(after) {
         #(input, "}", rest) ->
           lex_literal(advance(lexer, rest), [
             InputPart(input),
             LiteralPart(before),
             ..acc
           ])
+        _ -> Error(error.InvalidFormat)
+      }
+    }
+    "\\u{" -> {
+      case lexer.interpolation_splitter |> splitter.split(after) {
+        #(codepoint, "}", rest) -> {
+          case
+            codepoint |> int.base_parse(16) |> result.map(string.utf_codepoint)
+          {
+            Ok(Ok(codepoint)) -> {
+              lex_literal(advance(lexer, rest), [
+                LiteralPart([codepoint] |> string.from_utf_codepoints),
+                LiteralPart(before),
+                ..acc
+              ])
+            }
+            _ -> Error(error.InvalidCodepoint(codepoint))
+          }
+        }
         _ -> Error(error.InvalidFormat)
       }
     }
