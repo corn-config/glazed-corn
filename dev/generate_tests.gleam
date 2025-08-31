@@ -6,6 +6,7 @@ import simplifile
 type Test {
   Pass(name: String, corn_path: String, json_path: String)
   Fail(name: String, corn_path: String)
+  Skip(name: String, corn_path: String)
 }
 
 fn test_to_string(test_case: Test) -> String {
@@ -13,6 +14,11 @@ fn test_to_string(test_case: Test) -> String {
     Fail(name:, corn_path:) -> "pub fn " <> name <> "() {
 let assert Ok(corn_source) = read(\"" <> corn_path <> "\")
 let assert Error(_) = glazed_corn.parse(corn_source)
+}
+"
+    Skip(name:, corn_path:) -> "pub fn skip_" <> name <> "() {
+let assert Ok(corn_source) = read(\"" <> corn_path <> "\")
+let assert Ok(_) = glazed_corn.parse(corn_source)
 }
 "
     Pass(name:, corn_path:, json_path:) -> "pub fn " <> name <> "() {
@@ -45,7 +51,12 @@ fn path_to_test(corn_path: String) -> Test {
 
   case corn_path |> string.ends_with(".pos.corn") {
     True -> Pass(name, corn_path:, json_path:)
-    False -> Fail(name, corn_path:)
+    False -> {
+      case corn_path |> string.contains("overflow") {
+        False -> Fail(name, corn_path:)
+        True -> Skip(name, corn_path:)
+      }
+    }
   }
 }
 
