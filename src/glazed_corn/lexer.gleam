@@ -1,4 +1,4 @@
-import glazed_corn
+import glazed_corn/error
 import glazed_corn/token.{
   type Token, Boolean, Chain, CloseBrace, CloseBracket, Comment, Eof, Equals,
   Float, In, InputName, Integer, Key, Let, Literal, Null, OpenBrace, OpenBracket,
@@ -91,14 +91,14 @@ fn advance(lexer: Lexer, source: String) -> Lexer {
   Lexer(..lexer, source:)
 }
 
-pub fn tokenize(lexer: Lexer) -> Result(List(Token), glazed_corn.ParseError) {
+pub fn tokenize(lexer: Lexer) -> Result(List(Token), error.ParseError) {
   do_tokenize(lexer, [])
 }
 
 fn do_tokenize(
   lexer: Lexer,
   tokens: List(Token),
-) -> Result(List(Token), glazed_corn.ParseError) {
+) -> Result(List(Token), error.ParseError) {
   case lexer |> advance(lexer.source |> string.trim_start) |> next {
     Ok(#(Eof, _)) -> Ok(tokens |> list.reverse)
     Ok(#(token, lexer)) -> do_tokenize(lexer, [token, ..tokens])
@@ -106,7 +106,7 @@ fn do_tokenize(
   }
 }
 
-fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+fn next(lexer: Lexer) -> Result(#(Token, Lexer), error.ParseError) {
   case lexer.source {
     "" -> #(Eof, lexer) |> Ok
 
@@ -153,7 +153,7 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
           let #(input, rest) = lex_input_name(name, "")
           Ok(#(InputName(input), lexer |> advance(rest)))
         }
-        False -> Error(glazed_corn.InvalidFormat)
+        False -> Error(error.InvalidFormat)
       }
     }
 
@@ -181,7 +181,7 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
 fn lex_quoted_key(
   lexer: Lexer,
   acc: String,
-) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+) -> Result(#(Token, Lexer), error.ParseError) {
   let #(before, split, after) =
     lexer.quoted_key_splitter |> splitter.split(lexer.source)
 
@@ -194,7 +194,7 @@ fn lex_quoted_key(
 fn lex_literal(
   lexer: Lexer,
   acc: String,
-) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+) -> Result(#(Token, Lexer), error.ParseError) {
   let #(before, split, after) =
     lexer.string_splitter |> splitter.split(lexer.source)
 
@@ -376,7 +376,7 @@ fn lex_num_radix(
   lexer: Lexer,
   negative: Bool,
   radix: Int,
-) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+) -> Result(#(Token, Lexer), error.ParseError) {
   let #(before, split, after) =
     lexer.float_splitter |> splitter.split(lexer.source)
 
@@ -386,7 +386,7 @@ fn lex_num_radix(
 
       float.parse(before <> "." <> num)
       |> result.map(fn(f) { #(Float(f), lexer |> advance(rest)) })
-      |> result.replace_error(glazed_corn.InvalidFormat)
+      |> result.replace_error(error.InvalidFormat)
     }
     _ -> {
       let #(num, rest) = lexer.source |> extract_number("")
@@ -398,7 +398,7 @@ fn lex_num_radix(
             True -> Ok(#(Integer(-num), lexer |> advance(rest)))
           }
         }
-        _ -> Error(glazed_corn.InvalidFormat)
+        _ -> Error(error.InvalidFormat)
       }
     }
   }
