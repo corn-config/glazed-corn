@@ -82,7 +82,7 @@ pub fn new(source: String) -> Lexer {
     new_line_splitter: splitter.new(["\n", "\r\n"]),
     string_splitter: splitter.new(["\\\\", "\\\"", "\\n", "\\r", "\\t", "\""]),
     key_splitter: splitter.new(["=", ".", ..whitespace_codepoints]),
-    quoted_key_splitter: splitter.new(["'"]),
+    quoted_key_splitter: splitter.new(["\\'", "'"]),
     float_splitter: splitter.new([".", ..whitespace_codepoints]),
   )
 }
@@ -156,12 +156,8 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
         False -> Error(glazed_corn.InvalidFormat)
       }
     }
-    "'" <> rest -> {
-      case lexer.quoted_key_splitter |> splitter.split(rest) {
-        #(before, "'", after) -> #(Key(before), lexer |> advance(after)) |> Ok
-        _ -> Error(glazed_corn.InvalidFormat)
-      }
-    }
+
+    "'" <> rest -> lex_quoted_key(lexer |> advance(rest), "")
 
     source -> {
       let #(keyword, rest) = source |> lex_keyword("")
@@ -182,14 +178,25 @@ fn next(lexer: Lexer) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
   }
 }
 
+fn lex_quoted_key(
+  lexer: Lexer,
+  acc: String,
+) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
+  let #(before, split, after) =
+    lexer.quoted_key_splitter |> splitter.split(lexer.source)
+
+  case split {
+    "\\'" -> lex_quoted_key(advance(lexer, after), acc <> before <> "'")
+    _ -> #(Key(before), lexer |> advance(after)) |> Ok
+  }
+}
+
 fn lex_literal(
   lexer: Lexer,
   acc: String,
 ) -> Result(#(Token, Lexer), glazed_corn.ParseError) {
   let #(before, split, after) =
     lexer.string_splitter |> splitter.split(lexer.source)
-
-  echo split
 
   case split {
     "\\\\" -> lex_literal(advance(lexer, after), acc <> before <> "\\")
