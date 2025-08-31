@@ -3,4 +3,6 @@ pub type ParseError {
   InvalidLength
   UnexpectedToken(String)
   UnexpectedEof
+  MissingInput(String)
+  InvalidSpread
 }
