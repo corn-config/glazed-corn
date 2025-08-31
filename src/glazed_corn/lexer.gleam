@@ -187,7 +187,7 @@ fn lex_quoted_key(
 
   case split {
     "\\'" -> lex_quoted_key(advance(lexer, after), acc <> before <> "'")
-    _ -> #(Key(before), lexer |> advance(after)) |> Ok
+    _ -> #(Key(acc <> before), lexer |> advance(after)) |> Ok
   }
 }
 
