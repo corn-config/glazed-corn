@@ -385,7 +385,16 @@ fn lex_num_radix(
       let #(num, rest) = after |> string.trim_start |> split_float("")
 
       float.parse(before <> "." <> num)
-      |> result.map(fn(f) { #(Float(f), lexer |> advance(rest)) })
+      |> result.map(fn(f) {
+        {
+          let f = case negative {
+            False -> f
+            True -> f |> float.negate
+          }
+
+          #(Float(f), lexer |> advance(rest))
+        }
+      })
       |> result.replace_error(error.InvalidFormat)
     }
     _ -> {
